@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>회원가입</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --main: #ff7f50;
+      --main-dark: #e06030;
+      --bg: #fff8f2;
+      --card: #fff;
+      --border: #e5e7eb;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --success: #10b981;
+      --error: #ef4444;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Noto Sans KR", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .wrap {
+      width: 100%;
+      max-width: 480px;
+    }
+
+    .logo {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .logo h1 {
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--main);
+    }
+
+    .logo p {
+      font-size: 14px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    .card {
+      background: var(--card);
+      border-radius: 16px;
+      padding: 28px 24px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+    }
+
+    .step {
+      display: none;
+    }
+
+    .step.active {
+      display: block;
+    }
+
+    .step-title {
+      font-size: 17px;
+      font-weight: 700;
+      margin-bottom: 18px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid var(--main);
+      color: var(--main);
+    }
+
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      margin-bottom: 6px;
+      margin-top: 14px;
+    }
+
+    input[type="text"],
+    input[type="number"] {
+      width: 100%;
+      padding: 11px 14px;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      font-size: 15px;
+      font-family: inherit;
+      background: #fafafa;
+      color: var(--text);
+      transition: border-color 0.2s;
+      outline: none;
+    }
+
+    input:focus {
+      border-color: var(--main);
+      background: #fff;
+    }
+
+    .search-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .search-row input {
+      flex: 1;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 11px 20px;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      border: none;
+      transition: filter 0.15s;
+    }
+
+    .btn:hover { filter: brightness(1.08); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; filter: none; }
+
+    .btn-main {
+      background: var(--main);
+      color: #fff;
+      width: 100%;
+      margin-top: 20px;
+      padding: 13px;
+      font-size: 16px;
+    }
+
+    .btn-outline {
+      background: #fff;
+      border: 1.5px solid var(--border);
+      color: var(--text);
+    }
+
+    .school-list {
+      list-style: none;
+      margin-top: 10px;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .school-list li {
+      padding: 10px 14px;
+      cursor: pointer;
+      font-size: 14px;
+      border-bottom: 1px solid var(--border);
+      transition: background 0.1s;
+    }
+
+    .school-list li:last-child { border-bottom: none; }
+    .school-list li:hover { background: #fff0ea; }
+    .school-list li.selected { background: #fff0ea; font-weight: 700; }
+
+    .selected-school {
+      margin-top: 10px;
+      padding: 10px 14px;
+      background: #fff0ea;
+      border-radius: 10px;
+      font-size: 14px;
+      color: var(--main-dark);
+      font-weight: 600;
+      display: none;
+    }
+
+    .row2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .privacy-box {
+      background: #f9fafb;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.7;
+      margin-top: 14px;
+      max-height: 160px;
+      overflow-y: auto;
+    }
+
+    .privacy-box strong {
+      color: var(--text);
+    }
+
+    .agree-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .agree-row input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--main);
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .agree-row label {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    .msg {
+      margin-top: 12px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      display: none;
+    }
+
+    .msg.error { background: #fef2f2; color: var(--error); display: block; }
+    .msg.success { background: #f0fdf4; color: var(--success); display: block; }
+
+    /* 토큰 결과 */
+    .token-box {
+      background: #1e293b;
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      margin-top: 8px;
+    }
+
+    .token-label {
+      font-size: 12px;
+      color: #94a3b8;
+      margin-bottom: 10px;
+    }
+
+    .token-value {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: 6px;
+      color: var(--main);
+      font-family: monospace;
+      margin-bottom: 14px;
+    }
+
+    .token-copy {
+      background: var(--main);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 20px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    .token-notice {
+      margin-top: 16px;
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.6;
+      text-align: center;
+    }
+
+    .token-notice strong {
+      color: var(--main);
+    }
+
+    .timer {
+      display: inline-block;
+      background: #fef3c7;
+      color: #92400e;
+      border-radius: 6px;
+      padding: 2px 8px;
+      font-weight: 700;
+      font-size: 13px;
+      margin-top: 6px;
+    }
+
+    .loading-spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid #fff;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="logo">
+      <h1>🏫 학교 봇</h1>
+      <p>Discord 봇 회원가입</p>
+    </div>
+
+    <div class="card">
+
+      <!-- Step 1: 학교 검색 -->
+      <div class="step active" id="step1">
+        <div class="step-title">① 학교 검색</div>
+
+        <label>학교 이름</label>
+        <div class="search-row">
+          <input id="schoolInput" type="text" placeholder="학교 이름을 입력하세요">
+          <button class="btn btn-outline" id="searchBtn" onclick="searchSchool()">검색</button>
+        </div>
+
+        <ul class="school-list" id="schoolList" style="display:none"></ul>
+        <div class="selected-school" id="selectedSchool"></div>
+
+        <div class="row2">
+          <div>
+            <label>학년</label>
+            <input id="grade" type="number" placeholder="예: 2" min="1" max="6">
+          </div>
+          <div>
+            <label>반</label>
+            <input id="classNo" type="number" placeholder="예: 3" min="1">
+          </div>
+        </div>
+
+        <div class="msg" id="step1Msg"></div>
+        <button class="btn btn-main" onclick="goStep2()">다음</button>
+      </div>
+
+      <!-- Step 2: 개인정보 동의 -->
+      <div class="step" id="step2">
+        <div class="step-title">② 개인정보 수집 및 이용 동의</div>
+
+        <div class="privacy-box">
+          <strong>수집 항목</strong><br>
+          Discord 서버 ID, 학교명, 학교코드, 교육청코드, 학년, 반<br><br>
+          <strong>수집 목적</strong><br>
+          NEIS(나이스) API를 통한 시간표·급식 조회 및 봇 재시작 후 설정 유지<br><br>
+          <strong>이용 서비스</strong><br>
+          나이스(NEIS) 교육정보 개방 포털 API<br><br>
+          <strong>보관 장소</strong><br>
+          봇 운영 MongoDB 데이터베이스<br><br>
+          <strong>보관 기간</strong><br>
+          회원 탈퇴 또는 학교 설정 삭제 시까지<br><br>
+          <strong>거부 권리</strong><br>
+          동의를 거부할 수 있으나, 거부 시 서비스 이용이 제한됩니다.
+        </div>
+
+        <div class="agree-row">
+          <input type="checkbox" id="agreeCheck">
+          <label for="agreeCheck">개인정보 수집 및 이용에 동의합니다.</label>
+        </div>
+
+        <div class="msg" id="step2Msg"></div>
+        <button class="btn btn-main" id="submitBtn" onclick="submitRegister()">가입 완료</button>
+        <button class="btn btn-outline" style="width:100%;margin-top:8px;" onclick="goStep1()">이전</button>
+      </div>
+
+      <!-- Step 3: 토큰 발급 완료 -->
+      <div class="step" id="step3">
+        <div class="step-title">③ 가입 완료 — 토큰 발급</div>
+
+        <div class="token-box">
+          <div class="token-label">Discord 봇 인증 토큰</div>
+          <div class="token-value" id="tokenValue">------</div>
+          <button class="token-copy" onclick="copyToken()">📋 복사하기</button>
+        </div>
+
+        <div class="token-notice">
+          Discord에서 아래 커맨드를 입력하세요:<br>
+          <strong>/로그인 [토큰]</strong><br><br>
+          <span class="timer" id="timerEl">⏱ 5:00 후 만료</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    let selectedSchool = null;
+    let tokenValue = "";
+    let timerInterval = null;
+
+    // ── 학교 검색 ──────────────────────────────────────────
+    async function searchSchool() {
+      const name = document.getElementById("schoolInput").value.trim();
+      if (!name) return showMsg("step1Msg", "학교 이름을 입력하세요.", "error");
+
+      const btn = document.getElementById("searchBtn");
+      btn.disabled = true;
+      btn.textContent = "검색 중...";
+
+      try {
+        const res = await fetch(`/api/searchSchool?name=${encodeURIComponent(name)}`);
+        const data = await res.json();
+
+        const listEl = document.getElementById("schoolList");
+        listEl.innerHTML = "";
+
+        if (!Array.isArray(data) || data.length === 0) {
+          showMsg("step1Msg", "검색 결과가 없습니다.", "error");
+          listEl.style.display = "none";
+          return;
+        }
+
+        clearMsg("step1Msg");
+        data.forEach(school => {
+          const li = document.createElement("li");
+          const officeText = school.officeName ? `, ${school.officeName}` : "";
+          li.textContent = `${school.name} (${school.type}${officeText})`;
+          li.addEventListener("click", () => selectSchool(school, li));
+          listEl.appendChild(li);
+        });
+
+        listEl.style.display = "block";
+      } catch {
+        showMsg("step1Msg", "검색 중 오류가 발생했습니다.", "error");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "검색";
+      }
+    }
+
+    function selectSchool(school, liEl) {
+      selectedSchool = school;
+      document.querySelectorAll(".school-list li").forEach(el => el.classList.remove("selected"));
+      liEl.classList.add("selected");
+
+      const selectedEl = document.getElementById("selectedSchool");
+      const officeText = school.officeName ? `, ${school.officeName}` : "";
+      selectedEl.textContent = `✅ ${school.name} (${school.type}${officeText})`;
+      selectedEl.style.display = "block";
+      clearMsg("step1Msg");
+    }
+
+    // ── Step 이동 ──────────────────────────────────────────
+    function goStep2() {
+      if (!selectedSchool) return showMsg("step1Msg", "학교를 선택하세요.", "error");
+      const grade = document.getElementById("grade").value.trim();
+      const classNo = document.getElementById("classNo").value.trim();
+      if (!grade) return showMsg("step1Msg", "학년을 입력하세요.", "error");
+      if (!classNo) return showMsg("step1Msg", "반을 입력하세요.", "error");
+      clearMsg("step1Msg");
+      showStep("step2");
+    }
+
+    function goStep1() {
+      showStep("step1");
+    }
+
+    function showStep(id) {
+      document.querySelectorAll(".step").forEach(el => el.classList.remove("active"));
+      document.getElementById(id).classList.add("active");
+    }
+
+    // ── 회원가입 제출 ─────────────────────────────────────
+    async function submitRegister() {
+      if (!document.getElementById("agreeCheck").checked) {
+        return showMsg("step2Msg", "개인정보 수집 및 이용에 동의해주세요.", "error");
+      }
+
+      const btn = document.getElementById("submitBtn");
+      btn.disabled = true;
+      btn.innerHTML = '<span class="loading-spinner"></span>처리 중...';
+
+      try {
+        const body = {
+          schoolCode: selectedSchool.schoolCode,
+          officeCode: selectedSchool.officeCode,
+          schoolName: selectedSchool.name,
+          officeName: selectedSchool.officeName || "",
+          type:       selectedSchool.type || "",
+          grade:      document.getElementById("grade").value.trim(),
+          classNo:    document.getElementById("classNo").value.trim()
+        };
+
+        const res = await fetch("/api/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        });
+
+        const data = await res.json();
+        if (!res.ok) return showMsg("step2Msg", data.error || "오류가 발생했습니다.", "error");
+
+        tokenValue = data.token;
+        document.getElementById("tokenValue").textContent = tokenValue;
+        startTimer(5 * 60);
+        showStep("step3");
+      } catch {
+        showMsg("step2Msg", "서버 연결에 실패했습니다.", "error");
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = "가입 완료";
+      }
+    }
+
+    // ── 토큰 복사 ─────────────────────────────────────────
+    function copyToken() {
+      navigator.clipboard.writeText(tokenValue).then(() => {
+        const btn = document.querySelector(".token-copy");
+        btn.textContent = "✅ 복사됨!";
+        setTimeout(() => btn.textContent = "📋 복사하기", 2000);
+      });
+    }
+
+    // ── 타이머 ────────────────────────────────────────────
+    function startTimer(seconds) {
+      if (timerInterval) clearInterval(timerInterval);
+      let remaining = seconds;
+
+      function update() {
+        const m = String(Math.floor(remaining / 60)).padStart(2, "0");
+        const s = String(remaining % 60).padStart(2, "0");
+        document.getElementById("timerEl").textContent = `⏱ ${m}:${s} 후 만료`;
+        if (remaining <= 0) {
+          clearInterval(timerInterval);
+          document.getElementById("timerEl").textContent = "⛔ 토큰이 만료되었습니다. 다시 가입해주세요.";
+          document.getElementById("timerEl").style.background = "#fee2e2";
+          document.getElementById("timerEl").style.color = "#991b1b";
+        }
+        remaining--;
+      }
+
+      update();
+      timerInterval = setInterval(update, 1000);
+    }
+
+    // ── 메시지 헬퍼 ───────────────────────────────────────
+    function showMsg(id, text, type) {
+      const el = document.getElementById(id);
+      el.textContent = text;
+      el.className = `msg ${type}`;
+    }
+
+    function clearMsg(id) {
+      const el = document.getElementById(id);
+      el.textContent = "";
+      el.className = "msg";
+    }
+
+    // ── 엔터키 검색 ───────────────────────────────────────
+    document.getElementById("schoolInput").addEventListener("keydown", e => {
+      if (e.key === "Enter") searchSchool();
+    });
+  </script>
+</body>
+</html>

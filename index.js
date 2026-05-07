@@ -267,17 +267,60 @@ const commandHelpText =
   `\`/status\` - 현재 채널의 AI 대화 기록 수를 확인합니다.\n` +
   `\`/도움말\` - 사용 가능한 봇 커맨드 설명을 보여줍니다.`;
 
-// ── 13. 봇 준비 완료 ──────────────────────────────────────
-client.once(Events.ClientReady, async (readyClient) => {
-  console.log(`✅ Ready! Logged in as ${readyClient.user.tag}`);
+const managedCommandNames = new Set(commands.map(command => command.name));
+let slashCommandsReady = false;
 
+async function syncSlashCommands(applicationId) {
   const rest = new REST({ version: "10" }).setToken(DISCORD_TOKEN);
   try {
-    await rest.put(Routes.applicationCommands(readyClient.user.id), { body: commands });
-    console.log(`📡 슬래시 커맨드 ${commands.length}개 등록 완료`);
+    slashCommandsReady = false;
+
+    const existingCommands = await rest.get(Routes.applicationCommands(applicationId));
+    const existingChatCommands = new Map(
+      existingCommands
+        .filter(command => command.type === 1)
+        .map(command => [command.name, command])
+    );
+
+    for (const command of commands) {
+      const existing = existingChatCommands.get(command.name);
+      if (existing) {
+        await rest.put(Routes.applicationCommand(applicationId, existing.id), { body: command });
+      } else {
+        await rest.post(Routes.applicationCommands(applicationId), { body: command });
+      }
+    }
+
+    const syncedCommands = await rest.get(Routes.applicationCommands(applicationId));
+    const syncedChatCommandNames = new Set(
+      syncedCommands
+        .filter(command => command.type === 1)
+        .map(command => command.name)
+    );
+    const missingCommands = commands
+      .map(command => command.name)
+      .filter(name => !syncedChatCommandNames.has(name));
+
+    if (missingCommands.length) {
+      throw new Error(`동기화 누락: ${missingCommands.join(", ")}`);
+    }
+
+    slashCommandsReady = true;
+    console.log(`📡 슬래시 커맨드 ${commands.length}개 동기화 완료 및 활성화`);
   } catch (e) {
+    slashCommandsReady = false;
     console.error("⚠️ 슬래시 커맨드 등록 실패:", e.message);
   }
+}
+
+// ── 13. 봇 준비 완료 ──────────────────────────────────────
+client.once(Events.ClientReady, (readyClient) => {
+  console.log(`✅ Ready! Logged in as ${readyClient.user.tag}`);
+  console.log("⏳ 슬래시 커맨드 동기화는 후순위로 진행합니다.");
+
+  setTimeout(() => {
+    syncSlashCommands(readyClient.user.id);
+  }, 3000);
 });
 
 // ── 14. 메시지 응답 (멘션 + ping/pong) ───────────────────
@@ -314,6 +357,14 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
   if (interaction.isChatInputCommand()) {
     const { commandName } = interaction;
+
+    if (managedCommandNames.has(commandName) && !slashCommandsReady) {
+      await interaction.reply({
+        content: "⏳ 봇 커맨드를 동기화하는 중입니다. 잠시 후 다시 시도해주세요.",
+        ephemeral: true
+      });
+      return;
+    }
 
     // /회원가입
     if (commandName === "회원가입") {

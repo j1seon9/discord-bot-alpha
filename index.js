@@ -56,6 +56,7 @@ const KOREAN_RETRY_PROMPT = `${SYSTEM_PROMPT}
 
 const conversationHistory = new Map();
 const MAX_HISTORY = 10;
+const COMMAND_SYNC_DELAY_MS = 3000;
 
 // ── 5. KST 날짜 포맷 ──────────────────────────────────────
 function kstTodayFormatted() {
@@ -215,6 +216,19 @@ const client = new Client({
 });
 
 // ── 12. 슬래시 커맨드 정의 ────────────────────────────────
+const commandHelpItems = [
+  ["회원가입", "회원가입 웹페이지 링크와 Discord 연동 방법을 안내합니다."],
+  ["로그인", "회원가입 후 발급된 6자리 토큰으로 계정을 연동합니다."],
+  ["내정보", "현재 연동된 학교, 학년, 반 정보를 확인합니다."],
+  ["급식", "오늘 급식 메뉴를 조회합니다."],
+  ["시간표", "오늘 시간표를 조회합니다."],
+  ["ping", "봇 응답 속도를 확인합니다."],
+  ["chat", "Groq AI와 대화합니다."],
+  ["clear", "현재 채널의 AI 대화 기록을 초기화합니다."],
+  ["status", "현재 채널의 AI 대화 기록 수를 확인합니다."],
+  ["도움말", "사용 가능한 봇 커맨드 설명을 보여줍니다."]
+];
+
 const commands = [
   new SlashCommandBuilder()
     .setName("회원가입")
@@ -256,16 +270,9 @@ const commands = [
 
 const commandHelpText =
   `**사용 가능한 커맨드**\n\n` +
-  `\`/회원가입\` - 회원가입 웹페이지 링크와 Discord 연동 방법을 안내합니다.\n` +
-  `\`/로그인\` - 회원가입 후 발급된 6자리 토큰으로 계정을 연동합니다.\n` +
-  `\`/내정보\` - 현재 연동된 학교, 학년, 반 정보를 확인합니다.\n` +
-  `\`/급식\` - 오늘 급식 메뉴를 조회합니다.\n` +
-  `\`/시간표\` - 오늘 시간표를 조회합니다.\n` +
-  `\`/ping\` - 봇 응답 속도를 확인합니다.\n` +
-  `\`/chat\` - Groq AI와 대화합니다.\n` +
-  `\`/clear\` - 현재 채널의 AI 대화 기록을 초기화합니다.\n` +
-  `\`/status\` - 현재 채널의 AI 대화 기록 수를 확인합니다.\n` +
-  `\`/도움말\` - 사용 가능한 봇 커맨드 설명을 보여줍니다.`;
+  commandHelpItems
+    .map(([name, description]) => `\`/${name}\` - ${description}`)
+    .join("\n");
 
 const managedCommandNames = new Set(commands.map(command => command.name));
 let slashCommandsReady = false;
@@ -320,7 +327,7 @@ client.once(Events.ClientReady, (readyClient) => {
 
   setTimeout(() => {
     syncSlashCommands(readyClient.user.id);
-  }, 3000);
+  }, COMMAND_SYNC_DELAY_MS);
 });
 
 // ── 14. 메시지 응답 (멘션 + ping/pong) ───────────────────

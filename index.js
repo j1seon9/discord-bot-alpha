@@ -8,7 +8,8 @@ const {
   SlashCommandBuilder,
   ActionRowBuilder,
   ButtonBuilder,
-  ButtonStyle
+  ButtonStyle,
+  MessageFlags
 } = require("discord.js");
 const Groq  = require("groq-sdk");
 const fetchModule = require("node-fetch");
@@ -57,6 +58,7 @@ const KOREAN_RETRY_PROMPT = `${SYSTEM_PROMPT}
 const conversationHistory = new Map();
 const MAX_HISTORY = 10;
 const COMMAND_SYNC_DELAY_MS = 3000;
+const EPHEMERAL_FLAGS = MessageFlags.Ephemeral;
 
 // ── 5. KST 날짜 포맷 ──────────────────────────────────────
 function kstTodayFormatted() {
@@ -292,7 +294,7 @@ async function syncSlashCommands(applicationId) {
     for (const command of commands) {
       const existing = existingChatCommands.get(command.name);
       if (existing) {
-        await rest.put(Routes.applicationCommand(applicationId, existing.id), { body: command });
+        await rest.patch(Routes.applicationCommand(applicationId, existing.id), { body: command });
       } else {
         await rest.post(Routes.applicationCommands(applicationId), { body: command });
       }
@@ -368,7 +370,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (managedCommandNames.has(commandName) && !slashCommandsReady) {
       await interaction.reply({
         content: "⏳ 봇 커맨드를 동기화하는 중입니다. 잠시 후 다시 시도해주세요.",
-        ephemeral: true
+        flags: EPHEMERAL_FLAGS
       });
       return;
     }
@@ -390,13 +392,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
           `🔗 ${SERVER_URL}/register\n\n` +
           `⏱ 토큰은 발급 후 **5분** 이내에 입력해야 합니다.`,
         components: [row],
-        ephemeral: true
+        flags: EPHEMERAL_FLAGS
       });
     }
 
     // /로그인
     else if (commandName === "로그인") {
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: EPHEMERAL_FLAGS });
       const token = interaction.options.getString("토큰").trim();
 
       try {
@@ -445,7 +447,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     // /내정보
     else if (commandName === "내정보") {
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: EPHEMERAL_FLAGS });
       const user = await getUser(interaction.user.id);
       if (!user) {
         await interaction.editReply("⚠️ 연동된 정보가 없습니다. `/회원가입` 으로 먼저 가입해주세요.");
@@ -506,7 +508,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     // /clear
     else if (commandName === "clear") {
       conversationHistory.delete(interaction.channelId);
-      await interaction.reply({ content: "🗑️ 대화 기록이 초기화되었습니다!", ephemeral: true });
+      await interaction.reply({ content: "🗑️ 대화 기록이 초기화되었습니다!", flags: EPHEMERAL_FLAGS });
     }
 
     // /status
@@ -514,7 +516,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const count = Math.floor((conversationHistory.get(interaction.channelId)?.length || 0) / 2);
       await interaction.reply({
         content: `💬 현재 채널 대화 기록: **${count}턴** (최대 ${MAX_HISTORY}턴)`,
-        ephemeral: true
+        flags: EPHEMERAL_FLAGS
       });
     }
 
@@ -522,7 +524,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     else if (commandName === "도움말") {
       await interaction.reply({
         content: commandHelpText,
-        ephemeral: true
+        flags: EPHEMERAL_FLAGS
       });
     }
   }

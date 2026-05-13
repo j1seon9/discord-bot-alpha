@@ -24,8 +24,10 @@ const SERVER_URL    = (process.env.SERVER_URL || "http://localhost:8000").replac
 // ── 3. 사용자 캐시 ────────────────────────────────────────
 // discordId → { schoolCode, officeCode, schoolName, officeName, type, grade, classNo }
 const userCache = new Map();
+const loggedOutUsers = new Set();
 
 async function getUser(discordId) {
+  if (loggedOutUsers.has(discordId)) return null;
   if (userCache.has(discordId)) return userCache.get(discordId);
 
   try {
@@ -221,6 +223,7 @@ const client = new Client({
 const commandHelpItems = [
   ["회원가입", "회원가입 웹페이지 링크와 Discord 연동 방법을 안내합니다."],
   ["로그인", "회원가입 후 발급된 6자리 토큰으로 계정을 연동합니다."],
+  ["로그아웃", "현재 봇 세션에서 학교 연동 정보를 로그아웃합니다."],
   ["내정보", "현재 연동된 학교, 학년, 반 정보를 확인합니다."],
   ["급식", "오늘 급식 메뉴를 조회합니다."],
   ["시간표", "오늘 시간표를 조회합니다."],
@@ -241,6 +244,9 @@ const commands = [
     .addStringOption(o =>
       o.setName("토큰").setDescription("회원가입 페이지에서 발급된 6자리 토큰").setRequired(true)
     ),
+  new SlashCommandBuilder()
+    .setName("로그아웃")
+    .setDescription("현재 봇 세션에서 학교 연동 정보를 로그아웃합니다"),
   new SlashCommandBuilder()
     .setName("내정보")
     .setDescription("현재 연동된 내 학교 정보를 확인합니다"),
@@ -433,6 +439,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         }
 
         // 캐시 업데이트
+        loggedOutUsers.delete(interaction.user.id);
         userCache.set(interaction.user.id, data.user);
 
         await interaction.editReply(
@@ -443,6 +450,20 @@ client.on(Events.InteractionCreate, async (interaction) => {
       } catch (e) {
         await interaction.editReply("❌ 서버 연결에 실패했습니다. 잠시 후 다시 시도해주세요.");
       }
+    }
+
+    // /로그아웃
+    else if (commandName === "로그아웃") {
+      loggedOutUsers.add(interaction.user.id);
+      userCache.delete(interaction.user.id);
+
+      await interaction.reply({
+        content:
+          "✅ **로그아웃 완료!**\n\n" +
+          "현재 봇 세션에서 학교 연동 정보를 사용하지 않도록 처리했습니다.\n" +
+          "다시 사용하려면 `/로그인`으로 6자리 토큰을 입력해주세요.",
+        flags: EPHEMERAL_FLAGS
+      });
     }
 
     // /내정보

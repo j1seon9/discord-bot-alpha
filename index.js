@@ -9,6 +9,7 @@ const {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  EmbedBuilder,
   MessageFlags
 } = require("discord.js");
 const Groq  = require("groq-sdk");
@@ -198,6 +199,13 @@ function formatServerError(res, data) {
   return `❌ 서버 오류 (${res.status}): ${message}`;
 }
 
+function formatDateTime(value) {
+  if (!value) return "서버에서 제공되지 않음";
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "서버에서 제공되지 않음";
+  return date.toLocaleString("ko-KR", { timeZone: "Asia/Seoul" });
+}
+
 async function checkServerConnection() {
   const res = await fetch(`${SERVER_URL}/health`, { timeout: 5000 });
   const data = await safeJson(res);
@@ -224,7 +232,7 @@ const commandHelpItems = [
   ["회원가입", "회원가입 웹페이지 링크와 Discord 연동 방법을 안내합니다."],
   ["로그인", "회원가입 후 발급된 6자리 토큰으로 계정을 연동합니다."],
   ["로그아웃", "현재 봇 세션에서 학교 연동 정보를 로그아웃합니다."],
-  ["내정보", "현재 연동된 학교, 학년, 반 정보를 확인합니다."],
+  ["내정보", "Discord 프로필과 봇 서비스 연동 정보를 확인합니다."],
   ["급식", "오늘 급식 메뉴를 조회합니다."],
   ["시간표", "오늘 시간표를 조회합니다."],
   ["ping", "봇 응답 속도를 확인합니다."],
@@ -249,7 +257,7 @@ const commands = [
     .setDescription("현재 봇 세션에서 학교 연동 정보를 로그아웃합니다"),
   new SlashCommandBuilder()
     .setName("내정보")
-    .setDescription("현재 연동된 내 학교 정보를 확인합니다"),
+    .setDescription("Discord 프로필과 봇 서비스 연동 정보를 확인합니다"),
   new SlashCommandBuilder()
     .setName("급식")
     .setDescription("오늘 급식 메뉴를 보여줍니다"),
@@ -470,20 +478,31 @@ client.on(Events.InteractionCreate, async (interaction) => {
     else if (commandName === "내정보") {
       await interaction.deferReply({ flags: EPHEMERAL_FLAGS });
       const user = await getUser(interaction.user.id);
-      if (!user) {
-        await interaction.editReply("⚠️ 연동된 정보가 없습니다. `/회원가입` 으로 먼저 가입해주세요.");
-        return;
-      }
-
-      const officeText = user.officeName ? `, ${user.officeName}` : "";
-      const typeText   = user.type || "학교";
-
-      await interaction.editReply(
-          `👤 **내 학교 정보**\n\n` +
-          `📌 학교명: **${user.schoolName} (${typeText}${officeText})**\n` +
-          `📍 지역: ${user.officeName || "알 수 없음"}\n` +
-          `👤 학년/반: **${user.grade}학년 ${user.classNo}반**`
+      const accountUrl = `${SERVER_URL}/account`;
+      const serviceJoinedAt = user?.serviceJoinedAt || user?.createdAt || user?.agreedAt || user?.linkedAt || user?.updatedAt;
+      const schoolText = user
+        ? `${user.schoolName || "알 수 없음"} ${user.grade || "?"}학년 ${user.classNo || "?"}반`
+        : "연동된 정보가 없습니다.";
+      const avatarUrl = interaction.user.displayAvatarURL({ size: 256 });
+      const profileEmbed = new EmbedBuilder()
+        .setTitle("내 정보")
+        .setThumbnail(avatarUrl)
+        .setColor(user ? 0x2ecc71 : 0xf1c40f)
+        .addFields(
+          { name: "이름", value: interaction.user.tag || interaction.user.username, inline: true },
+          { name: "Discord ID", value: interaction.user.id, inline: true },
+          { name: "Discord 가입일", value: formatDateTime(interaction.user.createdAt), inline: false },
+          { name: "봇 서비스 가입일", value: user ? formatDateTime(serviceJoinedAt) : "연동된 정보가 없습니다.", inline: false },
+          { name: "학교 정보", value: schoolText, inline: false }
+        );
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setLabel("웹페이지 바로가기")
+          .setStyle(ButtonStyle.Link)
+          .setURL(accountUrl)
       );
+
+      await interaction.editReply({ embeds: [profileEmbed], components: [row] });
     }
 
     // /급식

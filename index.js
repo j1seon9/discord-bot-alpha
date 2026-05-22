@@ -221,7 +221,7 @@ async function checkServerConnection() {
   if (!res.ok) {
     throw new Error(`서버 상태 확인 실패 (${res.status})`);
   }
-  if (data?.db !== true) {
+  if (data?.db === false) {
     throw new Error("MongoDB가 아직 연결되지 않았습니다.");
   }
 }

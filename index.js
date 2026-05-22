@@ -20,6 +20,7 @@ require("dotenv").config();
 // ── 2. 설정값 로드 ─────────────────────────────────────────
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const GROQ_API_KEY  = process.env.GROQ_API_KEY;
+const BOT_API_KEY   = process.env.BOT_API_KEY || "";
 const SERVER_URL    = (process.env.SERVER_URL || "http://localhost:8000").replace(/\/$/, "");
 
 // ── 3. 사용자 캐시 ────────────────────────────────────────
@@ -197,6 +198,13 @@ function buildServerUrl(path, params = {}) {
 function formatServerError(res, data) {
   const message = data?.message || data?.error || "알 수 없는 오류";
   return `❌ 서버 오류 (${res.status}): ${message}`;
+}
+
+function botApiHeaders(extraHeaders = {}) {
+  return {
+    ...extraHeaders,
+    ...(BOT_API_KEY ? { "x-bot-key": BOT_API_KEY } : {})
+  };
 }
 
 function formatDateTime(value) {
@@ -418,7 +426,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       try {
         const res = await fetch(`${SERVER_URL}/api/verify`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: botApiHeaders({ "Content-Type": "application/json" }),
           body: JSON.stringify({
             token,
             discordId: interaction.user.id,
@@ -462,13 +470,28 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     // /로그아웃
     else if (commandName === "로그아웃") {
+      let serverUnlinked = false;
+      try {
+        const res = await fetch(`${SERVER_URL}/api/discord/unlink`, {
+          method: "POST",
+          headers: botApiHeaders({ "Content-Type": "application/json" }),
+          body: JSON.stringify({ discordId: interaction.user.id }),
+          timeout: 5000
+        });
+        serverUnlinked = res.ok;
+      } catch {
+        serverUnlinked = false;
+      }
+
       loggedOutUsers.add(interaction.user.id);
       userCache.delete(interaction.user.id);
 
       await interaction.reply({
         content:
           "✅ **로그아웃 완료!**\n\n" +
-          "현재 봇 세션에서 학교 연동 정보를 사용하지 않도록 처리했습니다.\n" +
+          (serverUnlinked
+            ? "서버의 Discord 연동 정보를 해제했습니다.\n"
+            : "현재 봇 세션에서 학교 연동 정보를 사용하지 않도록 처리했습니다.\n") +
           "다시 사용하려면 `/로그인`으로 6자리 토큰을 입력해주세요.",
         flags: EPHEMERAL_FLAGS
       });

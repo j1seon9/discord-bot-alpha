@@ -48,6 +48,7 @@ npm install
 ```env
 DISCORD_TOKEN=
 GROQ_API_KEY=
+BOT_API_KEY=
 SERVER_URL=
 ```
 
@@ -57,6 +58,7 @@ SERVER_URL=
 | --- | --- | --- |
 | `DISCORD_TOKEN` | Yes | Discord Developer Portal에서 발급한 봇 토큰 |
 | `GROQ_API_KEY` | Yes | Groq API 키 |
+| `BOT_API_KEY` | Recommended | 서버의 봇 전용 API 인증 키. 서버 `BOT_API_KEY`와 같은 값을 사용합니다. |
 | `SERVER_URL` | No | 연동 서버 주소. 비어 있으면 `http://localhost:8000` 사용 |
 
 ## Run
@@ -83,7 +85,8 @@ npm start
 | --- | --- | --- |
 | `GET` | `/health` | 서버 및 DB 상태 확인 |
 | `GET` | `/register` | 회원가입 웹페이지 |
-| `POST` | `/api/verify` | 6자리 토큰 검증 및 Discord 계정 연동 |
+| `POST` | `/api/verify` | 6자리 토큰 검증 및 Discord 계정 연동. `BOT_API_KEY`가 있으면 `x-bot-key` 헤더를 보냅니다. |
+| `POST` | `/api/discord/unlink` | Discord 계정 연동 해제. `BOT_API_KEY`가 있으면 `x-bot-key` 헤더를 보냅니다. |
 | `GET` | `/api/user/:discordId` | Discord 사용자 연동 정보 조회 |
 | `GET` | `/api/dailyMeal` | 오늘 급식 조회 |
 | `GET` | `/api/dailyTimetable` | 오늘 시간표 조회 |

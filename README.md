@@ -29,8 +29,12 @@
 | `/로그인` | 회원가입 후 발급된 6자리 토큰으로 Discord 계정을 연동합니다. |
 | `/로그아웃` | 현재 봇 세션에서 학교 연동 정보를 로그아웃합니다. |
 | `/내정보` | Discord 프로필과 봇 서비스 연동 정보를 확인합니다. |
+| `/학교검색` | 학교 이름으로 학교 정보를 검색합니다. |
 | `/급식` | 오늘 급식 메뉴를 조회합니다. |
 | `/시간표` | 오늘 시간표를 조회합니다. |
+| `/관리자로그인` | 허용된 관리자의 서버 인증을 확인합니다. |
+| `/관리자상태` | 로그인한 관리자에게 서버 상태를 보여줍니다. |
+| `/관리자로그아웃` | 관리자 세션을 종료합니다. |
 | `/ping` | 봇 응답 속도를 확인합니다. |
 | `/chat` | Groq AI와 대화합니다. |
 | `/clear` | 현재 채널의 AI 대화 기록을 초기화합니다. |
@@ -50,6 +54,10 @@ DISCORD_TOKEN=
 GROQ_API_KEY=
 BOT_API_KEY=
 SERVER_URL=
+ADMIN_DISCORD_IDS=
+ADMIN_ID=
+ADMIN_PASSWORD=
+ADMIN_AUTH_KEY=
 ```
 
 ### Environment Variables
@@ -60,6 +68,10 @@ SERVER_URL=
 | `GROQ_API_KEY` | Yes | Groq API 키 |
 | `BOT_API_KEY` | Recommended | 서버의 봇 전용 API 인증 키. 서버 `BOT_API_KEY`와 같은 값을 사용합니다. |
 | `SERVER_URL` | No | 연동 서버 주소. 비어 있으면 `http://localhost:8000` 사용 |
+| `ADMIN_DISCORD_IDS` | For admin commands | 관리자 커맨드를 허용할 Discord 사용자 ID 목록. 쉼표로 구분합니다. |
+| `ADMIN_ID` | For admin commands | 서버 관리자 API의 `x-admin-id` 값 |
+| `ADMIN_PASSWORD` | For admin commands | 서버 관리자 API의 `x-admin-password` 값 |
+| `ADMIN_AUTH_KEY` | For admin commands | 서버 관리자 API의 `x-admin-key` 값 |
 
 ## Run
 
@@ -88,8 +100,10 @@ npm start
 | `POST` | `/api/verify` | 6자리 토큰 검증 및 Discord 계정 연동. `BOT_API_KEY`가 있으면 `x-bot-key` 헤더를 보냅니다. |
 | `POST` | `/api/discord/unlink` | Discord 계정 연동 해제. `BOT_API_KEY`가 있으면 `x-bot-key` 헤더를 보냅니다. |
 | `GET` | `/api/user/:discordId` | Discord 사용자 연동 정보 조회 |
+| `GET` | `/api/searchSchool?name=` | 학교 이름 검색 |
 | `GET` | `/api/dailyMeal` | 오늘 급식 조회 |
 | `GET` | `/api/dailyTimetable` | 오늘 시간표 조회 |
+| `GET` | `/admin/monitor` | 관리자 인증 확인 및 서버 상태 조회 |
 
 ## Notes
 
@@ -97,6 +111,7 @@ npm start
 - 서버가 JSON이 아닌 오류 응답을 반환해도 봇이 종료되지 않도록 처리합니다.
 - Groq가 한국어 질문에 대해 깨진 한글 또는 비한국어 응답을 반환하면 한 번 자동 재시도합니다.
 - Discord 앱의 Entry Point command를 건드리지 않도록 슬래시 커맨드는 개별 생성/수정 방식으로 동기화합니다.
+- 관리자 비밀번호는 Discord 명령 입력으로 받지 않고 서버 환경변수에서만 불러옵니다.
 
 ## License
 

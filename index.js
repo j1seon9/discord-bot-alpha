@@ -22,11 +22,21 @@ const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const GROQ_API_KEY  = process.env.GROQ_API_KEY;
 const BOT_API_KEY   = process.env.BOT_API_KEY || "";
 const SERVER_URL    = (process.env.SERVER_URL || "http://localhost:8000").replace(/\/$/, "");
+const ADMIN_ID      = (process.env.ADMIN_ID || "").trim();
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "";
+const ADMIN_AUTH_KEY = (process.env.ADMIN_AUTH_KEY || "").trim();
+const ADMIN_DISCORD_IDS = new Set(
+  (process.env.ADMIN_DISCORD_IDS || "")
+    .split(",")
+    .map(id => id.trim())
+    .filter(Boolean)
+);
 
 // ── 3. 사용자 캐시 ────────────────────────────────────────
 // discordId → { schoolCode, officeCode, schoolName, officeName, type, grade, classNo }
 const userCache = new Map();
 const loggedOutUsers = new Set();
+const adminSessions = new Set();
 
 async function getUser(discordId) {
   if (loggedOutUsers.has(discordId)) return null;
@@ -163,6 +173,18 @@ async function fetchTimetable(schoolCode, officeCode, grade, classNo) {
   } catch (e) { return `❌ 오류: ${e.message}`; }
 }
 
+async function searchSchools(name) {
+  const url = buildServerUrl("/api/searchSchool", { name });
+  const res = await fetch(url, { timeout: 8000 });
+  const data = await safeJson(res);
+  if (!res.ok) throw new Error(data?.message || data?.error || `서버 오류 (${res.status})`);
+  if (!Array.isArray(data)) return [];
+
+  return data
+    .filter(school => school?.schoolCode && school?.officeCode)
+    .slice(0, 10);
+}
+
 // ── 10. 긴 메시지 분할 전송 ───────────────────────────────
 async function sendLong(interaction, content) {
   const chunks = content.match(/.{1,1990}/gs) || [];
@@ -207,6 +229,32 @@ function botApiHeaders(extraHeaders = {}) {
   };
 }
 
+function adminApiHeaders() {
+  return {
+    "x-admin-id": ADMIN_ID,
+    "x-admin-password": ADMIN_PASSWORD,
+    ...(ADMIN_AUTH_KEY ? { "x-admin-key": ADMIN_AUTH_KEY } : {})
+  };
+}
+
+function isAdminDiscordUser(discordId) {
+  return ADMIN_DISCORD_IDS.has(discordId);
+}
+
+async function fetchAdminMonitor() {
+  if (!ADMIN_ID || !ADMIN_PASSWORD || !ADMIN_DISCORD_IDS.size) {
+    throw new Error("관리자 봇 설정이 완료되지 않았습니다.");
+  }
+
+  const res = await fetch(`${SERVER_URL}/admin/monitor`, {
+    headers: adminApiHeaders(),
+    timeout: 8000
+  });
+  const data = await safeJson(res);
+  if (!res.ok) throw new Error(data?.message || data?.error || `관리자 인증 실패 (${res.status})`);
+  return data;
+}
+
 function formatDateTime(value) {
   if (!value) return "서버에서 제공되지 않음";
   const date = value instanceof Date ? value : new Date(value);
@@ -241,8 +289,12 @@ const commandHelpItems = [
   ["로그인", "회원가입 후 발급된 6자리 토큰으로 계정을 연동합니다."],
   ["로그아웃", "현재 봇 세션에서 학교 연동 정보를 로그아웃합니다."],
   ["내정보", "Discord 프로필과 봇 서비스 연동 정보를 확인합니다."],
+  ["학교검색", "학교 이름으로 학교 정보를 검색합니다."],
   ["급식", "오늘 급식 메뉴를 조회합니다."],
   ["시간표", "오늘 시간표를 조회합니다."],
+  ["관리자로그인", "허용된 관리자의 서버 인증을 확인합니다."],
+  ["관리자상태", "로그인한 관리자에게 서버 상태를 보여줍니다."],
+  ["관리자로그아웃", "관리자 세션을 종료합니다."],
   ["ping", "봇 응답 속도를 확인합니다."],
   ["chat", "Groq AI와 대화합니다."],
   ["clear", "현재 채널의 AI 대화 기록을 초기화합니다."],
@@ -267,11 +319,26 @@ const commands = [
     .setName("내정보")
     .setDescription("Discord 프로필과 봇 서비스 연동 정보를 확인합니다"),
   new SlashCommandBuilder()
+    .setName("학교검색")
+    .setDescription("학교 이름으로 학교 정보를 검색합니다")
+    .addStringOption(o =>
+      o.setName("학교명").setDescription("검색할 학교 이름").setRequired(true)
+    ),
+  new SlashCommandBuilder()
     .setName("급식")
     .setDescription("오늘 급식 메뉴를 보여줍니다"),
   new SlashCommandBuilder()
     .setName("시간표")
     .setDescription("오늘 시간표를 보여줍니다"),
+  new SlashCommandBuilder()
+    .setName("관리자로그인")
+    .setDescription("허용된 관리자의 서버 인증을 확인합니다"),
+  new SlashCommandBuilder()
+    .setName("관리자상태")
+    .setDescription("로그인한 관리자에게 서버 상태를 보여줍니다"),
+  new SlashCommandBuilder()
+    .setName("관리자로그아웃")
+    .setDescription("관리자 세션을 종료합니다"),
   new SlashCommandBuilder()
     .setName("ping")
     .setDescription("봇 응답 속도를 확인합니다"),
@@ -528,6 +595,36 @@ client.on(Events.InteractionCreate, async (interaction) => {
       await interaction.editReply({ embeds: [profileEmbed], components: [row] });
     }
 
+    // /학교검색
+    else if (commandName === "학교검색") {
+      await interaction.deferReply({ flags: EPHEMERAL_FLAGS });
+      const schoolName = interaction.options.getString("학교명").trim();
+
+      try {
+        const schools = await searchSchools(schoolName);
+        if (!schools.length) {
+          await interaction.editReply(`🔍 **${schoolName}** 검색 결과가 없습니다.`);
+          return;
+        }
+
+        const searchEmbed = new EmbedBuilder()
+          .setTitle(`학교 검색 결과: ${schoolName}`)
+          .setColor(0x3498db)
+          .setDescription(
+            schools.map((school, index) => {
+              const office = school.officeName || "교육청 정보 없음";
+              const type = school.type || "학교";
+              return `**${index + 1}. ${school.name || "이름 없음"}**\n${type} | ${office}\n학교코드: \`${school.schoolCode}\``;
+            }).join("\n\n")
+          )
+          .setFooter({ text: `${schools.length}개 표시 (최대 10개)` });
+
+        await interaction.editReply({ embeds: [searchEmbed] });
+      } catch (e) {
+        await interaction.editReply(`❌ 학교 검색 실패: ${e.message}`);
+      }
+    }
+
     // /급식
     else if (commandName === "급식") {
       await interaction.deferReply();
@@ -552,6 +649,62 @@ client.on(Events.InteractionCreate, async (interaction) => {
       await interaction.editReply(
         `📚 **${kstTodayFormatted()} 시간표** (${user.schoolName} ${user.grade}학년 ${user.classNo}반)\n\n${table}`
       );
+    }
+
+    // /관리자로그인
+    else if (commandName === "관리자로그인") {
+      await interaction.deferReply({ flags: EPHEMERAL_FLAGS });
+      if (!isAdminDiscordUser(interaction.user.id)) {
+        await interaction.editReply("❌ 관리자 권한이 없습니다.");
+        return;
+      }
+
+      try {
+        await fetchAdminMonitor();
+        adminSessions.add(interaction.user.id);
+        await interaction.editReply("✅ 관리자 인증이 완료되었습니다. `/관리자상태`를 사용할 수 있습니다.");
+      } catch (e) {
+        await interaction.editReply(`❌ 관리자 로그인 실패: ${e.message}`);
+      }
+    }
+
+    // /관리자상태
+    else if (commandName === "관리자상태") {
+      await interaction.deferReply({ flags: EPHEMERAL_FLAGS });
+      if (!isAdminDiscordUser(interaction.user.id) || !adminSessions.has(interaction.user.id)) {
+        await interaction.editReply("❌ 먼저 `/관리자로그인`을 실행해주세요.");
+        return;
+      }
+
+      try {
+        const monitor = await fetchAdminMonitor();
+        const statusEmbed = new EmbedBuilder()
+          .setTitle("관리자 서버 상태")
+          .setColor(0x2ecc71)
+          .addFields(
+            { name: "전체 요청", value: String(monitor?.traffic?.total ?? "-"), inline: true },
+            { name: "오늘 요청", value: String(monitor?.traffic?.today ?? "-"), inline: true },
+            { name: "메모리 (MB)", value: String(monitor?.system?.memoryMb ?? "-"), inline: true },
+            { name: "가동 시간 (초)", value: String(monitor?.system?.uptimeSec ?? "-"), inline: true },
+            { name: "의심 IP", value: String(monitor?.security?.suspiciousCount ?? "-"), inline: true },
+            { name: "공지 수", value: String(monitor?.notices?.total ?? "-"), inline: true }
+          )
+          .setTimestamp();
+
+        await interaction.editReply({ embeds: [statusEmbed] });
+      } catch (e) {
+        adminSessions.delete(interaction.user.id);
+        await interaction.editReply(`❌ 관리자 상태 조회 실패: ${e.message}`);
+      }
+    }
+
+    // /관리자로그아웃
+    else if (commandName === "관리자로그아웃") {
+      adminSessions.delete(interaction.user.id);
+      await interaction.reply({
+        content: "✅ 관리자 세션을 종료했습니다.",
+        flags: EPHEMERAL_FLAGS
+      });
     }
 
     // /ping

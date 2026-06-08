@@ -21,7 +21,7 @@ require("dotenv").config();
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const GROQ_API_KEY  = process.env.GROQ_API_KEY;
 const BOT_API_KEY   = process.env.BOT_API_KEY || "";
-const SERVER_URL    = (process.env.SERVER_URL || "http://localhost:8000").replace(/\/$/, "");
+const SERVER_URL    = (process.env.SERVER_URL || "").replace(/\/$/, "");
 const ADMIN_ID      = (process.env.ADMIN_ID || "").trim();
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "";
 const ADMIN_AUTH_KEY = (process.env.ADMIN_AUTH_KEY || "").trim();
@@ -59,6 +59,7 @@ let groq;
 
 const SYSTEM_PROMPT = `당신은 Discord 서버의 친절한 AI 어시스턴트입니다.
 한국어와 영어 모두 유창하게 답변할 수 있습니다.
+답변을 할 때 사용자가 질문한 것을 바로 답하시오. 예를 들어 "YOU : "등의 형식을 사용하지 마십시오.
 사용자가 한국어로 말하면 반드시 자연스러운 한국어로 답변하세요.
 한글이 깨진 문자(예: �, ì, ë, ê, í)가 섞이지 않도록 UTF-8 한글을 그대로 출력하세요.
 답변은 간결하고 명확하게 해주세요. Discord 마크다운 형식을 활용해도 됩니다.`;
@@ -174,15 +175,51 @@ async function fetchTimetable(schoolCode, officeCode, grade, classNo) {
 }
 
 async function searchSchools(name) {
+  if (!SERVER_URL) throw new Error("SERVER_URL이 설정되지 않았습니다.");
   const url = buildServerUrl("/api/searchSchool", { name });
-  const res = await fetch(url, { timeout: 8000 });
+  let res;
+  try {
+    res = await fetch(url, { timeout: 8000 });
+  } catch (e) {
+    throw new Error(`서버 연결 실패: ${e.message || "네트워크 오류"}`);
+  }
+
   const data = await safeJson(res);
   if (!res.ok) throw new Error(data?.message || data?.error || `서버 오류 (${res.status})`);
-  if (!Array.isArray(data)) return [];
+  if (!Array.isArray(data)) throw new Error("학교검색 API 응답 형식이 올바르지 않습니다.");
 
   return data
     .filter(school => school?.schoolCode && school?.officeCode)
     .slice(0, 10);
+}
+
+async function resolveSchoolOptions(interaction, { requireClass = false } = {}) {
+  const user = await getUser(interaction.user.id);
+  const school = {
+    schoolCode: interaction.options.getString("학교코드")?.trim() || user?.schoolCode || "",
+    officeCode: interaction.options.getString("교육청코드")?.trim() || user?.officeCode || "",
+    schoolName: interaction.options.getString("학교명")?.trim() || user?.schoolName || "직접 입력한 학교",
+    grade: interaction.options.getString("학년")?.trim() || user?.grade || "",
+    classNo: interaction.options.getString("반")?.trim() || user?.classNo || ""
+  };
+
+  if (!school.schoolCode || !school.officeCode) {
+    return {
+      error:
+        "⚠️ 학교코드와 교육청코드가 필요합니다.\n" +
+        "`/학교검색 학교명:<학교이름>`으로 코드를 확인한 뒤 다시 입력하거나, `/회원가입`으로 기본 학교를 연동해주세요."
+    };
+  }
+
+  if (requireClass && (!school.grade || !school.classNo)) {
+    return {
+      error:
+        "⚠️ 시간표 조회에는 학년과 반이 필요합니다.\n" +
+        "`/시간표 학교코드:<코드> 교육청코드:<코드> 학년:<학년> 반:<반>` 형식으로 입력하거나, `/회원가입`으로 기본 학급을 연동해주세요."
+    };
+  }
+
+  return { school };
 }
 
 // ── 10. 긴 메시지 분할 전송 ───────────────────────────────
@@ -290,8 +327,8 @@ const commandHelpItems = [
   ["로그아웃", "현재 봇 세션에서 학교 연동 정보를 로그아웃합니다."],
   ["내정보", "Discord 프로필과 봇 서비스 연동 정보를 확인합니다."],
   ["학교검색", "학교 이름으로 학교 정보를 검색합니다."],
-  ["급식", "오늘 급식 메뉴를 조회합니다."],
-  ["시간표", "오늘 시간표를 조회합니다."],
+  ["급식", "오늘 급식 메뉴를 조회합니다. 학교코드/교육청코드를 입력하면 로그인 없이도 사용할 수 있습니다."],
+  ["시간표", "오늘 시간표를 조회합니다. 학교코드/교육청코드/학년/반을 입력하면 로그인 없이도 사용할 수 있습니다."],
   ["관리자로그인", "허용된 관리자의 서버 인증을 확인합니다."],
   ["관리자상태", "로그인한 관리자에게 서버 상태를 보여줍니다."],
   ["관리자로그아웃", "관리자 세션을 종료합니다."],
@@ -326,10 +363,34 @@ const commands = [
     ),
   new SlashCommandBuilder()
     .setName("급식")
-    .setDescription("오늘 급식 메뉴를 보여줍니다"),
+    .setDescription("오늘 급식 메뉴를 보여줍니다")
+    .addStringOption(o =>
+      o.setName("학교코드").setDescription("/학교검색으로 확인한 학교코드").setRequired(false)
+    )
+    .addStringOption(o =>
+      o.setName("교육청코드").setDescription("/학교검색으로 확인한 교육청코드").setRequired(false)
+    )
+    .addStringOption(o =>
+      o.setName("학교명").setDescription("응답에 표시할 학교명").setRequired(false)
+    ),
   new SlashCommandBuilder()
     .setName("시간표")
-    .setDescription("오늘 시간표를 보여줍니다"),
+    .setDescription("오늘 시간표를 보여줍니다")
+    .addStringOption(o =>
+      o.setName("학교코드").setDescription("/학교검색으로 확인한 학교코드").setRequired(false)
+    )
+    .addStringOption(o =>
+      o.setName("교육청코드").setDescription("/학교검색으로 확인한 교육청코드").setRequired(false)
+    )
+    .addStringOption(o =>
+      o.setName("학년").setDescription("조회할 학년").setRequired(false)
+    )
+    .addStringOption(o =>
+      o.setName("반").setDescription("조회할 반").setRequired(false)
+    )
+    .addStringOption(o =>
+      o.setName("학교명").setDescription("응답에 표시할 학교명").setRequired(false)
+    ),
   new SlashCommandBuilder()
     .setName("관리자로그인")
     .setDescription("허용된 관리자의 서버 인증을 확인합니다"),
@@ -614,7 +675,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
             schools.map((school, index) => {
               const office = school.officeName || "교육청 정보 없음";
               const type = school.type || "학교";
-              return `**${index + 1}. ${school.name || "이름 없음"}**\n${type} | ${office}\n학교코드: \`${school.schoolCode}\``;
+              return (
+                `**${index + 1}. ${school.name || "이름 없음"}**\n` +
+                `${type} | ${office}\n` +
+                `학교코드: \`${school.schoolCode}\`\n` +
+                `교육청코드: \`${school.officeCode}\``
+              );
             }).join("\n\n")
           )
           .setFooter({ text: `${schools.length}개 표시 (최대 10개)` });
@@ -627,27 +693,27 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     // /급식
     else if (commandName === "급식") {
-      await interaction.deferReply();
-      const user = await getUser(interaction.user.id);
-      if (!user) {
-        await interaction.editReply("⚠️ `/회원가입` 으로 먼저 학교를 등록해주세요.");
+      await interaction.deferReply({ flags: EPHEMERAL_FLAGS });
+      const { school, error } = await resolveSchoolOptions(interaction);
+      if (error) {
+        await interaction.editReply(error);
         return;
       }
-      const menu = await fetchMeal(user.schoolCode, user.officeCode);
-      await interaction.editReply(`🍱 **${kstTodayFormatted()} 급식** (${user.schoolName})\n\n${menu}`);
+      const menu = await fetchMeal(school.schoolCode, school.officeCode);
+      await interaction.editReply(`🍱 **${kstTodayFormatted()} 급식** (${school.schoolName})\n\n${menu}`);
     }
 
     // /시간표
     else if (commandName === "시간표") {
-      await interaction.deferReply();
-      const user = await getUser(interaction.user.id);
-      if (!user) {
-        await interaction.editReply("⚠️ `/회원가입` 으로 먼저 학교를 등록해주세요.");
+      await interaction.deferReply({ flags: EPHEMERAL_FLAGS });
+      const { school, error } = await resolveSchoolOptions(interaction, { requireClass: true });
+      if (error) {
+        await interaction.editReply(error);
         return;
       }
-      const table = await fetchTimetable(user.schoolCode, user.officeCode, user.grade, user.classNo);
+      const table = await fetchTimetable(school.schoolCode, school.officeCode, school.grade, school.classNo);
       await interaction.editReply(
-        `📚 **${kstTodayFormatted()} 시간표** (${user.schoolName} ${user.grade}학년 ${user.classNo}반)\n\n${table}`
+        `📚 **${kstTodayFormatted()} 시간표** (${school.schoolName} ${school.grade}학년 ${school.classNo}반)\n\n${table}`
       );
     }
 
